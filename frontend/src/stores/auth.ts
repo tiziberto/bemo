@@ -3,8 +3,28 @@ import { defineStore } from 'pinia'
 import api from '../api/api'
 import { jwtDecode } from 'jwt-decode'
 
-// Roles tal como vienen del backend
-const HIERARCHY = ['ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_RECEPCION', 'ROLE_FACTURACION', 'ROLE_PACIENTE']
+// Roles válidos del sistema (tal como vienen del backend)
+const VALID_ROLES = ['ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_RECEPCION', 'ROLE_FACTURACION', 'ROLE_PACIENTE']
+const HIERARCHY   = VALID_ROLES
+
+// ── Limpieza de localStorage al cargar el módulo ───────────────
+// Elimina claves del proyecto anterior y tokens con roles inválidos
+;(function cleanStorage() {
+  // Claves legacy del proyecto viejo
+  ;['role', 'username'].forEach(k => localStorage.removeItem(k))
+
+  // Si el token no tiene ningún rol válido de este sistema, descartarlo
+  const token = localStorage.getItem('token')
+  if (!token) return
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    const roles: string[] = payload.roles ?? []
+    const hasValidRole = roles.some(r => VALID_ROLES.includes(r))
+    if (!hasValidRole) localStorage.removeItem('token')
+  } catch {
+    localStorage.removeItem('token')
+  }
+})()
 
 interface JwtPayload {
   sub: string

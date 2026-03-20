@@ -25,8 +25,13 @@ public class JwtUtil {
     }
 
     public String generateToken(UserDetails userDetails) {
+        var roles = userDetails.getAuthorities().stream()
+                .map(a -> a.getAuthority())
+                .toList();
+
         return Jwts.builder()
                 .subject(userDetails.getUsername())
+                .claim("roles", roles)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + expiration))
                 .signWith(getKey())

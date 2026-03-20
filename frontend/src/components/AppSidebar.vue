@@ -69,36 +69,45 @@ const router  = useRouter()
 const auth    = useAuthStore()
 const drawer  = ref(true)
 
-// ── Datos del usuario ──────────────────────────────────────
-const username = computed(() => auth.user?.nombre || 'Usuario')
-const rolLabel = computed(() => auth.primaryRole?.replace('ROLE_', '') || '')
+// ── Datos del usuario (leídos desde el JWT via Pinia) ──────────
+const username     = computed(() => auth.username || 'Usuario')
+const rolLabel     = computed(() => {
+  const labels: Record<string, string> = {
+    ROLE_ADMIN:       'Administrador',
+    ROLE_DOCTOR:      'Médico',
+    ROLE_RECEPCION:   'Recepción',
+    ROLE_FACTURACION: 'Facturación',
+    ROLE_PACIENTE:    'Paciente',
+  }
+  return labels[auth.primaryRole ?? ''] ?? auth.primaryRole ?? ''
+})
 const userInitials = computed(() => username.value.substring(0, 2).toUpperCase())
 
-// ── Menú por rol ───────────────────────────────────────────
+// ── Menú por rol (roles exactos del backend) ───────────────────
 const MENU: Record<string, { to: string; icon: string; title: string }[]> = {
   ROLE_ADMIN: [
     { to: '/dashboard/admin',     icon: 'mdi-shield-crown',        title: 'Panel Admin' },
-    { to: '/users',               icon: 'mdi-account-group',       title: 'Usuarios' },
-    { to: '/dashboard/doctor',    icon: 'mdi-doctor',              title: 'Vista Doctor' },
+    { to: '/dashboard/doctor',    icon: 'mdi-doctor',              title: 'Vista Médico' },
     { to: '/dashboard/reception', icon: 'mdi-desk',                title: 'Vista Recepción' },
     { to: '/dashboard/billing',   icon: 'mdi-cash-register',       title: 'Vista Facturación' },
+    { to: '/dashboard/patient',   icon: 'mdi-account-heart',       title: 'Vista Paciente' },
   ],
   ROLE_DOCTOR: [
     { to: '/dashboard/doctor',    icon: 'mdi-view-dashboard',      title: 'Mi Panel' },
     { to: '/appointments',        icon: 'mdi-calendar-clock',      title: 'Mis Turnos' },
     { to: '/patients',            icon: 'mdi-account-heart',       title: 'Pacientes' },
   ],
-  ROLE_RECEPTION: [
+  ROLE_RECEPCION: [
     { to: '/dashboard/reception', icon: 'mdi-view-dashboard',      title: 'Mi Panel' },
     { to: '/appointments',        icon: 'mdi-calendar-plus',       title: 'Gestión de Turnos' },
     { to: '/patients',            icon: 'mdi-account-search',      title: 'Pacientes' },
   ],
-  ROLE_BILLING: [
+  ROLE_FACTURACION: [
     { to: '/dashboard/billing',   icon: 'mdi-view-dashboard',      title: 'Mi Panel' },
     { to: '/billing/insurance',   icon: 'mdi-shield-check',        title: 'Obras Sociales' },
     { to: '/billing/invoices',    icon: 'mdi-file-document',       title: 'Liquidaciones' },
   ],
-  ROLE_PATIENT: [
+  ROLE_PACIENTE: [
     { to: '/dashboard/patient',   icon: 'mdi-view-dashboard',      title: 'Mi Panel' },
     { to: '/my-appointments',     icon: 'mdi-calendar',            title: 'Mis Turnos' },
   ],
