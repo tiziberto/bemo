@@ -3,7 +3,7 @@ import type { Orden, Conciliacion } from '../types';
 
 // Se utiliza el puerto 8080 configurado en tu Backend de Spring Boot [cite: 2, 14]
 const instance = axios.create({
-  baseURL: "http://localhost:8080/api/v1"
+  baseURL: "/api/v1"
 });
 
 // Interceptor para inyectar el Token JWT en cada petición según la configuración de seguridad [cite: 13]
@@ -25,7 +25,7 @@ export default {
   // --- ORDENES (OrdenRestController) ---
   // Obtiene la lista completa de órdenes (Requerido para el monitoreo en tiempo real) [cite: 16, 21]
   getOrdenes: () => instance.get<Orden[]>('/ordenes'),
-  
+
   // Detalle de una orden específica por su número único [cite: 16, 21]
   getOrden: (numeroOrden: number) => instance.get<Orden>(`/ordenes/${numeroOrden}`),
 
@@ -42,7 +42,7 @@ export default {
   aceptarAlarma: (numeroOrden: number) => instance.put(`/ordenes/${numeroOrden}/aceptar-alarma`),
 
   // --- USUARIOS (UserRestController) ---
-  // Administración de usuarios y roles según requerimiento 
+  // Administración de usuarios y roles según requerimiento
   getUsers: () => instance.get('/users'),
   updateUser: (user: any) => instance.put('/users/update', user)
 

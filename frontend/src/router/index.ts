@@ -56,5 +56,41 @@ const routes: RouteRecordRaw[] = [
 
   // ── Catch-all ─────────────────────────────────────
   { path: '/:pathMatch(.*)*', redirect: '/' }
-  
+
 ]
+
+const router = createRouter({
+  history: createWebHistory(import.meta.env.BASE_URL),
+  routes
+})
+
+// Navigation Guard para manejar la lógica de roles que definiste
+router.beforeEach((to, from, next) => {
+  const token = localStorage.getItem('token');
+  const userRole = localStorage.getItem('role');
+
+  // 1. Si la ruta es pública, dejar pasar
+  if (to.meta.public) {
+    return next();
+  }
+
+  // 2. Si no hay token, al login
+  if (!token) {
+    return next('/login');
+  }
+
+  // 3. Redirección lógica de /dashboard según rol
+  if (to.path === '/dashboard') {
+    const target = ROLE_REDIRECT[userRole || ''] || '/login';
+    return next(target);
+  }
+
+  // 4. Verificación de permisos por rol
+  if (to.meta.roles && !(to.meta.roles as string[]).includes(userRole || '')) {
+    return next('/unauthorized');
+  }
+
+  next();
+});
+
+export default router;
