@@ -56,4 +56,5 @@ const routes: RouteRecordRaw[] = [
 
   // ── Catch-all ─────────────────────────────────────
   { path: '/:pathMatch(.*)*', redirect: '/' }
+  
 ]

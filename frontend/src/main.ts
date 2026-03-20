@@ -20,22 +20,25 @@ const vuetify = createVuetify({
       industrial: {
         dark: true,
         colors: {
-          background: '#121212', // Gris casi negro (Material Dark)
-          surface: '#1E1E1E',    // Gris un poco más claro para tarjetas
-          primary: '#FF9800',    // Naranja Ámbar (Color de seguridad/industrial)
-          secondary: '#757575',  // Gris neutro
-          success: '#4CAF50',    // Verde estándar
-          warning: '#FFC107',
-          error: '#FF5252',
-          info: '#2196F3',
+          background: '#121212',
+          surface:    '#1E1E1E',
+          primary:    '#FF9800',
+          secondary:  '#757575',
+          success:    '#4CAF50',
+          warning:    '#FFC107',
+          error:      '#FF5252',
+          info:       '#2196F3',
         }
       }
     }
   }
 })
 
-const app = createApp(App)
-app.use(createPinia())
+const pinia = createPinia()
+const app   = createApp(App)
+
+// ORDEN CRÍTICO: pinia → router → vuetify → mount
+app.use(pinia)
 app.use(router)
 app.use(vuetify)
 app.mount('#app')

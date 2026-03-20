@@ -7,8 +7,8 @@
         <v-avatar color="primary" size="60" class="mb-3 shadow-glow">
           <v-icon icon="mdi-gas-station" size="32" color="white"></v-icon>
         </v-avatar>
-        <h2 class="text-h5 font-weight-bold text-white">Sistema de Carga</h2>
-        <div class="text-caption text-grey-lighten-1">Acceso Seguro</div>
+<v-icon icon="mdi-hospital-building" size="32" color="white"></v-icon>
+<h2 class="text-h5 font-weight-bold text-white">Ecomed</h2>
       </v-card-title>
 
       <v-card-text class="pa-6">
