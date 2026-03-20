@@ -1,7 +1,7 @@
 <template>
   <v-app style="background: #0A0F1E">
     <EcoSidebar v-if="!isLoginPage" />
-    <v-main :style="!isLoginPage ? 'margin-left: 0' : ''">
+    <v-main>
       <router-view v-slot="{ Component }">
         <transition name="fade" mode="out-in">
           <component :is="Component" />
@@ -17,10 +17,10 @@ import { useRoute } from 'vue-router'
 import EcoSidebar from './components/AppSidebar.vue'
 
 const route = useRoute()
-const isLoginPage = computed(() => route.path === '/login')
+const isLoginPage = computed(() => route.path === '/login' || route.path === '/unauthorized')
 </script>
 
 <style>
 .fade-enter-active, .fade-leave-active { transition: opacity 0.18s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
-</style>d 
+</style>

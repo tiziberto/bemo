@@ -6,7 +6,6 @@ const instance = axios.create({
   baseURL: 'http://localhost:8080/api/users'
 })
 
-// Inyecta el token JWT en cada petición protegida
 instance.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
   if (token) {
@@ -16,11 +15,11 @@ instance.interceptors.request.use((config) => {
 })
 
 export default {
-  // ── AUTH ────────────────────────────────────────────────────
-  login:    (credentials: LoginRequest)  => instance.post('/login',    credentials),
+  // ── AUTH ─────────────────────────────────────────────────────
+  login:    (credentials: LoginRequest)    => instance.post('/login',    credentials),
   register: (data:        RegisterRequest) => instance.post('/register', data),
 
-  // ── USUARIOS (solo ADMIN) ───────────────────────────────────
+  // ── USUARIOS (solo ADMIN) ────────────────────────────────────
   getUsers:   ()           => instance.get<User[]>('/users'),
   updateUser: (user: User) => instance.put('/users/update', user),
 }

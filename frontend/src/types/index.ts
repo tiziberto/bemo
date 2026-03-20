@@ -1,38 +1,34 @@
-// src/types/index.ts
+// src/types/index.ts — Tipos del sistema ECOMED
 
-export interface Camion {
-  id: number;
-  patente: string;
-  descripcion?: string;
-  cisternado?: string;
+export interface LoginRequest {
+  username: string
+  password: string
 }
 
-export interface Orden {
-  id: number;
-  numeroOrden: number;
-  estado: 'ESTADO_1_PENDIENTE_PESAJE_INICIAL' | 'ESTADO_2_CON_PESAJE_INICIAL_REGISTRADO' | 'ESTADO_3_CERRADA_PARA_CARGA' | 'ESTADO_4_FINALIZADA';
-  camion: Camion;
-  preset: number;
-  
-  // Datos dinámicos (pueden venir null del backend si no arrancó la carga)
-  ultimaMasaAcumulada: number | null;
-  ultimaTemperatura: number | null;
-  ultimaDensidad: number | null;
-  ultimoCaudal: number | null;
-  
-  fechaInicioCarga?: string;
-  alarmaTemperaturaEnviada: boolean;
-  alarmaTemperaturaAceptada: boolean;
+export interface LoginResponse {
+  token: string
+  username: string
+  roles: string[]
 }
 
-export interface Conciliacion {
-  numeroOrden: number;
-  pesajeInicial: number;
-  pesajeFinal: number;
-  productoCargado: number;
-  netoBalanza: number;
-  diferenciaBalanzaCaudalimetro: number;
-  promedioTemperatura: number;
-  promedioDensidad: number;
-  promedioCaudal: number;
+export interface RegisterRequest {
+  username: string
+  password: string
+  email: string
+  roles?: string[]
+}
+
+export interface User {
+  id: number
+  username: string
+  email: string
+  isActive: boolean
+  createdAt: string
+  roles: Role[]
+}
+
+export interface Role {
+  id: number
+  name: string
+  description: string
 }

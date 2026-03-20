@@ -96,35 +96,41 @@ const auth   = useAuthStore()
 const username  = ref('')
 const password  = ref('')
 const loading   = ref(false)
+const errorMessage = ref('')
 const showPass  = ref(false)
 const focusUser = ref(false)
 const focusPass = ref(false)
-const errorMessage = ref('')
 
 const features = [
-  { icon: 'mdi-calendar-check', text: 'Gestión de turnos en tiempo real' },
-  { icon: 'mdi-file-medical',   text: 'Historias clínicas digitales' },
-  { icon: 'mdi-shield-check',   text: 'Datos protegidos y encriptados' },
+  { icon: 'mdi-calendar-check',  text: 'Gestión de turnos en tiempo real' },
+  { icon: 'mdi-file-medical',    text: 'Historias clínicas digitales' },
+  { icon: 'mdi-shield-check',    text: 'Facturación y obras sociales' },
+  { icon: 'mdi-account-multiple',text: 'Multi-rol: médicos, recepción y más' },
 ]
 
+const ROLE_REDIRECT: Record<string, string> = {
+  ROLE_ADMIN:       '/dashboard/admin',
+  ROLE_DOCTOR:      '/dashboard/doctor',
+  ROLE_RECEPCION:   '/dashboard/reception',
+  ROLE_FACTURACION: '/dashboard/billing',
+  ROLE_PACIENTE:    '/dashboard/patient',
+}
+
 const handleLogin = async () => {
-  if (!username.value || !password.value) {
-    errorMessage.value = 'Completá todos los campos.'
-    return
-  }
   loading.value = true
   errorMessage.value = ''
   try {
     await auth.login(username.value, password.value)
-    router.push('/dashboard')
+    router.push(ROLE_REDIRECT[auth.primaryRole ?? ''] ?? '/unauthorized')
   } catch (e: any) {
     errorMessage.value = e.response?.status === 401
-      ? 'Credenciales incorrectas.'
+      ? 'Usuario o contraseña incorrectos.'
       : 'Servidor no disponible.'
   } finally {
     loading.value = false
   }
 }
+
 </script>
 
 <style scoped>
