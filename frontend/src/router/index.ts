@@ -72,36 +72,5 @@ const routes: RouteRecordRaw[] = [
 
   // ── Catch-all ────────────────────────────────────────────────
   { path: '/:pathMatch(.*)*', redirect: '/' }
+  
 ]
-
-const router = createRouter({
-  history: createWebHistory(),
-  routes,
-})
-
-// ── Guard global de navegación ──────────────────────────────────
-router.beforeEach((to) => {
-  const auth = useAuthStore()
-
-  // 1. Rutas públicas → siempre permitidas
-  if (to.meta.public) return true
-
-  // 2. No autenticado → redirigir al login
-  if (!auth.isAuthenticated) return '/login'
-
-  // 3. /dashboard → redirigir al dashboard según el rol principal
-  if (to.path === '/dashboard') {
-    const dest = ROLE_REDIRECT[auth.primaryRole ?? '']
-    return dest ?? '/unauthorized'
-  }
-
-  // 4. Ruta con roles requeridos → verificar que el usuario tenga uno
-  const requiredRoles = to.meta.roles as string[] | undefined
-  if (requiredRoles && !auth.hasAnyRole(requiredRoles)) {
-    return '/unauthorized'
-  }
-
-  return true
-})
-
-export default router

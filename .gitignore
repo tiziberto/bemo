@@ -37,3 +37,9 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Docker data ###
+data/
+
+### Claude Code ###
+.claude/
