@@ -1,26 +1,8 @@
-<template>
-  <v-app style="background: #0A0F1E">
-    <EcoSidebar v-if="!isLoginPage" />
-    <v-main>
-      <router-view v-slot="{ Component }">
-        <transition name="fade" mode="out-in">
-          <component :is="Component" />
-        </transition>
-      </router-view>
-    </v-main>
-  </v-app>
-</template>
-
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRoute } from 'vue-router'
-import EcoSidebar from './components/AppSidebar.vue'
-
-const route = useRoute()
-const isLoginPage = computed(() => route.path === '/login' || route.path === '/unauthorized')
+import Toaster from "@/components/ui/Toaster.vue";
 </script>
 
-<style>
-.fade-enter-active, .fade-leave-active { transition: opacity 0.18s ease; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
-</style>
+<template>
+  <Toaster />
+  <RouterView />
+</template>
