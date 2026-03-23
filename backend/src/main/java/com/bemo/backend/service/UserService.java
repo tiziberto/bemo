@@ -1,6 +1,8 @@
 package com.bemo.backend.service;
 
 import com.bemo.backend.dto.RegisterRequest;
+import com.bemo.backend.dto.UpdateUserRequest;
+import com.bemo.backend.dto.UserDto;
 import com.bemo.backend.model.Role;
 import com.bemo.backend.model.User;
 import com.bemo.backend.repository.RoleRepository;
@@ -10,7 +12,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +23,64 @@ public class UserService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+
+    public UserDto updateUser(Long id, UpdateUserRequest request) {
+        User user = userRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        if (request.getUsername() != null && !request.getUsername().isBlank()) {
+            if (!request.getUsername().equals(user.getUsername()) &&
+                userRepository.existsByUsername(request.getUsername())) {
+                throw new RuntimeException("El nombre de usuario ya existe");
+            }
+            user.setUsername(request.getUsername());
+        }
+        if (request.getEmail() != null) {
+            user.setEmail(request.getEmail().isBlank() ? null : request.getEmail());
+        }
+        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            user.setPassword(passwordEncoder.encode(request.getPassword()));
+        }
+        userRepository.save(user);
+        return new UserDto(user.getId(), user.getUsername(), user.getEmail(),
+            user.getIsActive(), user.getCreatedAt(),
+            user.getRoles().stream().map(Role::getName).collect(Collectors.toSet()));
+    }
+
+    public void deleteUser(Long id) {
+        User user = userRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        user.getRoles().clear();
+        userRepository.save(user);
+        userRepository.delete(user);
+    }
+
+    public UserDto updateUserRole(Long id, String roleName) {
+        User user = userRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        Role role = roleRepository.findByName(roleName)
+            .orElseThrow(() -> new RuntimeException("Rol no encontrado: " + roleName));
+        user.getRoles().clear();
+        user.getRoles().add(role);
+        userRepository.save(user);
+        return new UserDto(
+            user.getId(), user.getUsername(), user.getEmail(),
+            user.getIsActive(), user.getCreatedAt(),
+            user.getRoles().stream().map(Role::getName).collect(Collectors.toSet())
+        );
+    }
+
+    public List<UserDto> getAllUsers() {
+        return userRepository.findAll().stream()
+            .map(u -> new UserDto(
+                u.getId(),
+                u.getUsername(),
+                u.getEmail(),
+                u.getIsActive(),
+                u.getCreatedAt(),
+                u.getRoles().stream().map(Role::getName).collect(Collectors.toSet())
+            ))
+            .collect(Collectors.toList());
+    }
 
     public User register(RegisterRequest request) {
         if (userRepository.existsByUsername(request.getUsername())) {

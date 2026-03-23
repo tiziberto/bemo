@@ -6,7 +6,7 @@ import {
   type Component,
 } from "lucide-vue-next";
 
-export type UserRole = "admin" | "paciente" | "medico" | "administrativo" | "contaduria";
+export type UserRole = "ROLE_ADMIN" | "ROLE_PACIENTE" | "ROLE_DOCTOR" | "ROLE_RECEPCION" | "ROLE_FACTURACION";
 
 export interface MockUser {
   id: string;
@@ -28,11 +28,11 @@ export interface SidebarItem {
 }
 
 export const roleLabels: Record<UserRole, string> = {
-  admin: "Administrador",
-  paciente: "Paciente",
-  medico: "Médico",
-  administrativo: "Administrativo",
-  contaduria: "Contaduría",
+  ROLE_ADMIN: "Administrador",
+  ROLE_PACIENTE: "Paciente",
+  ROLE_DOCTOR: "Médico",
+  ROLE_RECEPCION: "Recepción",
+  ROLE_FACTURACION: "Facturación",
 };
 
 export const mockUsers: MockUser[] = [
@@ -44,7 +44,7 @@ export const mockUsers: MockUser[] = [
 ];
 
 export const sidebarConfig: Record<UserRole, SidebarSection[]> = {
-  admin: [
+  ROLE_ADMIN: [
     {
       title: "Tablas",
       items: [
@@ -90,7 +90,7 @@ export const sidebarConfig: Record<UserRole, SidebarSection[]> = {
       ],
     },
   ],
-  paciente: [
+  ROLE_PACIENTE: [
     {
       title: "Mi Portal",
       items: [
@@ -104,7 +104,7 @@ export const sidebarConfig: Record<UserRole, SidebarSection[]> = {
       ],
     },
   ],
-  medico: [
+  ROLE_DOCTOR: [
     {
       title: "Mi Práctica",
       items: [
@@ -124,7 +124,7 @@ export const sidebarConfig: Record<UserRole, SidebarSection[]> = {
       ],
     },
   ],
-  administrativo: [
+  ROLE_RECEPCION: [
     {
       title: "Operaciones",
       items: [
@@ -137,7 +137,7 @@ export const sidebarConfig: Record<UserRole, SidebarSection[]> = {
       ],
     },
   ],
-  contaduria: [
+  ROLE_FACTURACION: [
     {
       title: "Finanzas",
       items: [

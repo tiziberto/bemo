@@ -45,8 +45,8 @@ const navLinks = [
         <div class="space-y-3">
           <h4 class="font-semibold text-sm uppercase tracking-wider opacity-70">Contacto</h4>
           <div class="space-y-2 text-sm opacity-80">
-            <p class="flex items-center gap-2"><MapPin class="h-4 w-4 shrink-0" /> Av. Colón 5000, Córdoba, Argentina</p>
-            <p class="flex items-center gap-2"><Phone class="h-4 w-4 shrink-0" /> (0351) 456-7890</p>
+            <p class="flex items-center gap-2"><MapPin class="h-4 w-4 shrink-0" /> Córdoba 180 Q8300, Neuquén</p>
+            <p class="flex items-center gap-2"><Phone class="h-4 w-4 shrink-0" /> 0299 456-8800</p>
             <p class="flex items-center gap-2"><Mail class="h-4 w-4 shrink-0" /> info@ecomed.com.ar</p>
           </div>
         </div>

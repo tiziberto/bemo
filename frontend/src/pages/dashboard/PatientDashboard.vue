@@ -33,7 +33,7 @@ const historial = [
   <div class="space-y-6 max-w-4xl">
     <div class="flex items-start justify-between">
       <div>
-        <h1 class="text-2xl font-bold">¡Hola, {{ auth.user?.name?.split(' ')[0] }}!</h1>
+        <h1 class="text-2xl font-bold">¡Hola, {{ auth.username }}!</h1>
         <p class="text-muted-foreground">Gestioná tus turnos y estudios desde aquí</p>
       </div>
       <Button size="sm">
@@ -105,9 +105,7 @@ const historial = [
       </CardHeader>
       <CardContent>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-          <div><span class="text-muted-foreground">Nombre:</span> <span class="font-medium">{{ auth.user?.name }}</span></div>
-          <div><span class="text-muted-foreground">DNI:</span> <span class="font-medium">{{ auth.user?.dni }}</span></div>
-          <div><span class="text-muted-foreground">Email:</span> <span class="font-medium">{{ auth.user?.email }}</span></div>
+          <div><span class="text-muted-foreground">Usuario:</span> <span class="font-medium">{{ auth.username }}</span></div>
           <div><span class="text-muted-foreground">Obra Social:</span> <span class="font-medium">OSDE 310</span></div>
         </div>
       </CardContent>

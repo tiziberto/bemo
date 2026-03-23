@@ -22,6 +22,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
       children: [
         { path: "", component: () => import("@/pages/dashboard/DashboardHome.vue") },
+        { path: "admin", component: () => import("@/pages/dashboard/AdminDashboard.vue") },
+        { path: "usuarios", component: () => import("@/pages/dashboard/UsersPage.vue") },
+        { path: "doctor", component: () => import("@/pages/dashboard/DoctorDashboard.vue") },
+        { path: "reception", component: () => import("@/pages/dashboard/AdminStaffDashboard.vue") },
+        { path: "billing", component: () => import("@/pages/dashboard/AccountingDashboard.vue") },
+        { path: "patient", component: () => import("@/pages/dashboard/PatientDashboard.vue") },
         { path: ":section(.*)", component: () => import("@/pages/dashboard/DashboardPlaceholder.vue") },
       ],
     },
@@ -32,7 +38,7 @@ const router = createRouter({
 // Navigation guard for protected routes
 router.beforeEach((to, from, next) => {
   if (to.matched.some((r) => r.meta.requiresAuth)) {
-    const stored = localStorage.getItem("ecomed_user");
+    const stored = localStorage.getItem("token");
     if (!stored) {
       next("/login");
       return;

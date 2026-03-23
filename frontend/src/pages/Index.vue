@@ -15,11 +15,11 @@ import heroImage from "@/assets/hero-medical.jpg";
 
 const services = [
   { icon: Stethoscope, name: "Ecografía", desc: "Diagnóstico por ultrasonido de alta resolución" },
-  { icon: Scan, name: "Radiología", desc: "Radiografías digitales con mínima exposición" },
-  { icon: BrainCircuit, name: "Tomografía", desc: "Tomografía computada multicorte" },
-  { icon: Zap, name: "Resonancia", desc: "Resonancia magnética de alto campo" },
   { icon: Heart, name: "Mamografía", desc: "Mamografía digital de alta definición" },
-  { icon: Bone, name: "Densitometría", desc: "Densitometría ósea de última generación" },
+  { icon: Scan, name: "Ecografía Ginecológica", desc: "Estudio del aparato reproductor femenino, útero y ovarios" },
+  { icon: BrainCircuit, name: "Ecografía Obstétrica", desc: "Control y seguimiento del embarazo en todas sus etapas" },
+  { icon: Zap, name: "Colposcopía", desc: "Examen de cuello uterino para detección precoz de lesiones" },
+  { icon: Bone, name: "Pelvimetría", desc: "Medición de la pelvis para evaluación obstétrica" },
 ];
 
 const whyUs = [
@@ -31,9 +31,9 @@ const whyUs = [
 const faqs = [
   { q: "¿Cómo debo prepararme para un estudio?", a: "La preparación varía según el tipo de estudio. Al confirmar su turno, le enviaremos las indicaciones específicas. Para ecografías abdominales se requiere ayuno de 6 horas." },
   { q: "¿Cuánto tardan los resultados?", a: "Los informes están disponibles en 24 a 48 horas hábiles. Puede descargarlos desde el Portal del Paciente o retirarlos en recepción." },
-  { q: "¿Qué obras sociales aceptan?", a: "Trabajamos con las principales obras sociales y prepagas: OSDE, Swiss Medical, Galeno, APROSS, entre otras. Consulte la lista completa en recepción." },
+  { q: "¿Qué obras sociales aceptan?", a: "Trabajamos con las principales obras sociales y prepagas: OSDE, Swiss Medical, Galeno, INSTITUTO, entre otras. Consulte la lista completa en recepción." },
   { q: "¿Necesito orden médica?", a: "Sí, para realizar cualquier estudio de diagnóstico por imágenes es necesario presentar la orden médica correspondiente al momento del turno." },
-  { q: "¿Puedo reservar turno online?", a: "Sí, puede reservar su turno desde nuestra sección Reservar Turno o comunicándose telefónicamente al (0351) 456-7890." },
+  { q: "¿Puedo reservar turno online?", a: "Sí, puede reservar su turno desde nuestra sección Reservar Turno o comunicándose telefónicamente al 0299 456-8800." },
 ];
 </script>
 

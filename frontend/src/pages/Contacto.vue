@@ -38,14 +38,14 @@ function handleSubmit() {
                 <MapPin class="h-5 w-5 text-primary mt-0.5 shrink-0" />
                 <div>
                   <h3 class="font-semibold text-sm">Dirección</h3>
-                  <p class="text-sm text-muted-foreground">Av. Colón 5000, Córdoba, Argentina</p>
+                  <p class="text-sm text-muted-foreground">Córdoba 180 Q8300, Q8300 Neuquén</p>
                 </div>
               </div>
               <div class="flex items-start gap-3">
                 <Phone class="h-5 w-5 text-primary mt-0.5 shrink-0" />
                 <div>
                   <h3 class="font-semibold text-sm">Teléfono</h3>
-                  <p class="text-sm text-muted-foreground">(0351) 456-7890</p>
+                  <p class="text-sm text-muted-foreground">0299 456-8800</p>
                 </div>
               </div>
               <div class="flex items-start gap-3">
@@ -70,7 +70,7 @@ function handleSubmit() {
           <div class="rounded-lg overflow-hidden border bg-muted h-56 flex items-center justify-center">
             <div class="text-center text-muted-foreground">
               <MapPin class="h-10 w-10 mx-auto mb-2 opacity-40" />
-              <p class="text-sm">Av. Colón 5000, Córdoba</p>
+              <p class="text-sm">Córdoba 180 Q8300, Neuquén</p>
             </div>
           </div>
         </div>
@@ -98,7 +98,7 @@ function handleSubmit() {
               </div>
               <div class="space-y-2">
                 <label class="text-sm font-medium">Teléfono</label>
-                <Input placeholder="351 456 7890" />
+                <Input placeholder="0299 456-8800" />
               </div>
               <div class="space-y-2">
                 <label class="text-sm font-medium">Mensaje</label>

@@ -39,7 +39,7 @@ const doctorStats = [
 <template>
   <div class="space-y-6">
     <div>
-      <h1 class="text-2xl font-bold">Bienvenida, {{ auth.user?.name }}</h1>
+      <h1 class="text-2xl font-bold">Bienvenido, {{ auth.username }}</h1>
       <p class="text-muted-foreground">Resumen de tu jornada y estudios pendientes</p>
     </div>
 

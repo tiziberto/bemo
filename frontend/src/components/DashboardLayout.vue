@@ -4,7 +4,6 @@ import { PanelLeft } from "lucide-vue-next";
 import DashboardSidebar from "./DashboardSidebar.vue";
 import Button from "@/components/ui/Button.vue";
 import { useAuthStore } from "@/stores/auth";
-import { roleLabels } from "@/types/roles";
 
 const auth = useAuthStore();
 const collapsed = ref(false);
@@ -20,7 +19,7 @@ const collapsed = ref(false);
         </Button>
         <div class="flex-1" />
         <span class="text-xs text-muted-foreground">
-          {{ auth.user ? `${roleLabels[auth.user.role]} — ${auth.user.name}` : '' }}
+          {{ auth.isAuthenticated ? auth.username : '' }}
         </span>
       </header>
       <main class="flex-1 p-4 md:p-6">

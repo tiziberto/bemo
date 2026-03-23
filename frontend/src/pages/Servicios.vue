@@ -7,28 +7,28 @@ import { Stethoscope, Scan, BrainCircuit, Bone, Heart, Zap } from "lucide-vue-ne
 
 const services = [
   {
-    icon: Stethoscope, name: "Ecografía",
-    desc: "Estudios por ultrasonido para evaluar órganos internos, embarazo, tiroides, partes blandas y sistema vascular. Procedimiento no invasivo, indoloro y sin radiación.",
-  },
-  {
-    icon: Scan, name: "Radiología Digital",
-    desc: "Radiografías digitales de alta resolución con mínima exposición a radiación. Incluye radiología general, ósea, torácica y contrastada.",
-  },
-  {
-    icon: BrainCircuit, name: "Tomografía Computada",
-    desc: "Tomografía multicorte de alta velocidad para estudios cerebrales, torácicos, abdominales y vasculares. Diagnósticos precisos con tiempos de adquisición mínimos.",
-  },
-  {
-    icon: Zap, name: "Resonancia Magnética",
-    desc: "Resonancia magnética de alto campo (1.5T) para estudios neurológicos, musculoesqueléticos, abdominales y cardíacos. Sin exposición a radiación.",
+    icon: Stethoscope, name: "Ecografía General",
+    desc: "Estudios por ultrasonido para evaluar órganos internos, tiroides, partes blandas y sistema vascular. Procedimiento no invasivo, indoloro y sin radiación.",
   },
   {
     icon: Heart, name: "Mamografía Digital",
     desc: "Mamografía digital de alta definición para detección temprana de cáncer de mama. Incluye tomosíntesis mamaria para mayor precisión diagnóstica.",
   },
   {
-    icon: Bone, name: "Densitometría Ósea",
-    desc: "Evaluación de la densidad mineral ósea para diagnóstico y seguimiento de osteoporosis. Método rápido, preciso y con mínima exposición.",
+    icon: Scan, name: "Ecografía Ginecológica",
+    desc: "Evaluación del aparato reproductor femenino: útero, ovarios y trompas. Diagnóstico de quistes, miomas, endometriosis y otras patologías ginecológicas.",
+  },
+  {
+    icon: BrainCircuit, name: "Ecografía Obstétrica",
+    desc: "Control y seguimiento del embarazo en todas sus etapas. Incluye morfología fetal, Doppler placentario y medición de líquido amniótico.",
+  },
+  {
+    icon: Zap, name: "Colposcopía",
+    desc: "Examen detallado del cuello uterino, vagina y vulva mediante colposcopio. Indicada para seguimiento de Papanicolaou alterado y detección precoz de lesiones.",
+  },
+  {
+    icon: Bone, name: "Pelvimetría",
+    desc: "Medición y evaluación de las dimensiones de la pelvis materna para planificación obstétrica. Complemento fundamental en la atención del embarazo de alto riesgo.",
   },
 ];
 </script>

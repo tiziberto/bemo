@@ -52,6 +52,22 @@ export const useAuthStore = defineStore("auth", () => {
     localStorage.removeItem("token");
   }
 
+  function init() {
+    const stored = localStorage.getItem("token");
+    if (!stored) return;
+    try {
+      const decoded = jwtDecode<JwtPayload>(stored);
+      const now = Math.floor(Date.now() / 1000);
+      if (decoded.exp && decoded.exp < now) {
+        logout();
+      } else {
+        token.value = stored;
+      }
+    } catch {
+      logout();
+    }
+  }
+
   return {
     token,
     loading,
@@ -62,5 +78,6 @@ export const useAuthStore = defineStore("auth", () => {
     hasAnyRole,
     login,
     logout,
+    init,
   };
 });

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { RouterLink, useRoute } from "vue-router";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 import { LogOut, Activity, PanelLeft } from "lucide-vue-next";
 import { useAuthStore } from "@/stores/auth";
-import { sidebarConfig, roleLabels } from "@/types/roles";
+import { sidebarConfig, roleLabels, type UserRole } from "@/types/roles";
 import Button from "@/components/ui/Button.vue";
 import Avatar from "@/components/ui/Avatar.vue";
 import AvatarFallback from "@/components/ui/AvatarFallback.vue";
@@ -13,23 +13,22 @@ const emit = defineEmits<{ "update:collapsed": [value: boolean] }>();
 
 const auth = useAuthStore();
 const route = useRoute();
+const router = useRouter();
 
-const sections = computed(() => (auth.user ? sidebarConfig[auth.user.role] : []));
-const initials = computed(() =>
-  auth.user
-    ? auth.user.name
-        .split(" ")
-        .map((w) => w[0])
-        .join("")
-        .slice(0, 2)
-        .toUpperCase()
-    : ""
+function handleLogout() {
+  auth.logout();
+  router.push("/login");
+}
+
+const sections = computed(() =>
+  auth.primaryRole ? sidebarConfig[auth.primaryRole as UserRole] ?? [] : []
 );
+const initials = computed(() => auth.username.slice(0, 2).toUpperCase());
 </script>
 
 <template>
   <aside
-    v-if="auth.user"
+    v-if="auth.isAuthenticated"
     :class="[
       'bg-sidebar border-r border-sidebar-border flex flex-col h-screen sticky top-0 transition-all duration-300 z-40',
       collapsed ? 'w-0 overflow-hidden' : 'w-64'
@@ -76,11 +75,11 @@ const initials = computed(() =>
           <AvatarFallback class="bg-primary text-primary-foreground text-xs">{{ initials }}</AvatarFallback>
         </Avatar>
         <div class="flex-1 min-w-0">
-          <p class="text-sm font-medium truncate">{{ auth.user.name }}</p>
-          <p class="text-xs text-muted-foreground">{{ roleLabels[auth.user.role] }}</p>
+          <p class="text-sm font-medium truncate">{{ auth.username }}</p>
+          <p class="text-xs text-muted-foreground">{{ roleLabels[auth.primaryRole as UserRole] ?? auth.primaryRole }}</p>
         </div>
       </div>
-      <Button variant="ghost" size="sm" class="w-full justify-start" @click="auth.logout()">
+      <Button variant="ghost" size="sm" class="w-full justify-start" @click="handleLogout()">
         <LogOut class="h-4 w-4 mr-2" /> Cerrar sesión
       </Button>
     </div>
