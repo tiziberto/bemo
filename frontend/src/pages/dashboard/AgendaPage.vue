@@ -1,0 +1,1182 @@
+<script setup lang="ts">
+import { ref, computed, onMounted, watch } from "vue";
+import axios from "axios";
+import { useAuthStore } from "@/stores/auth";
+import {
+  ChevronLeft, ChevronRight, CalendarDays, Calendar,
+  RefreshCw, Filter, Plus, X, Trash2, Send, BanIcon,
+} from "lucide-vue-next";
+import Card from "@/components/ui/Card.vue";
+import CardContent from "@/components/ui/CardContent.vue";
+import CardHeader from "@/components/ui/CardHeader.vue";
+import CardTitle from "@/components/ui/CardTitle.vue";
+import Input from "@/components/ui/Input.vue";
+import Button from "@/components/ui/Button.vue";
+
+const API_TURNOS   = "http://localhost:8080/api/turnos";
+const API_PROF     = "http://localhost:8080/api/profesionales";
+const API_AGENDA   = "http://localhost:8080/api/agenda";
+const API_SUC      = "http://localhost:8080/api/sucursales";
+const API_BLOQUEOS = "http://localhost:8080/api/bloqueos";
+
+const auth    = useAuthStore();
+const headers = () => ({ Authorization: `Bearer ${auth.token}` });
+
+// ─── Roles ────────────────────────────────────────────────────────────────────
+const isDoctor    = computed(() => auth.hasAnyRole(["ROLE_DOCTOR"]));
+const isRecepcion = computed(() => auth.hasAnyRole(["ROLE_RECEPCION"]));
+const isAdmin     = computed(() => auth.hasAnyRole(["ROLE_ADMIN"]));
+const canFilter   = computed(() => isAdmin.value || isRecepcion.value);
+const canManage   = computed(() => isAdmin.value);
+
+// ─── Tab: "calendar" | "schedule" ────────────────────────────────────────────
+type TabMode = "calendar" | "schedule";
+const tab = ref<TabMode>("calendar");
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  CALENDAR TAB
+// ═══════════════════════════════════════════════════════════════════════════════
+
+type ViewMode = "week" | "month" | "day";
+const viewMode = ref<ViewMode>("week");
+
+// Anchor date
+const anchor = ref<Date>(startOfWeek(new Date()));
+
+function startOfDay(d: Date): Date {
+  const r = new Date(d);
+  r.setHours(0, 0, 0, 0);
+  return r;
+}
+
+function startOfWeek(d: Date): Date {
+  const r = new Date(d);
+  const day = r.getDay();
+  const diff = day === 0 ? -6 : 1 - day; // Monday first
+  r.setDate(r.getDate() + diff);
+  r.setHours(0, 0, 0, 0);
+  return r;
+}
+function startOfMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
+}
+
+const rangeStart = computed<Date>(() => {
+  if (viewMode.value === "week") return anchor.value;
+  if (viewMode.value === "day") return anchor.value;
+  return startOfMonth(anchor.value);
+});
+const rangeEnd = computed<Date>(() => {
+  if (viewMode.value === "week") {
+    const d = new Date(anchor.value);
+    d.setDate(d.getDate() + 7);
+    return d;
+  }
+  if (viewMode.value === "day") {
+    const d = new Date(anchor.value);
+    d.setDate(d.getDate() + 1);
+    return d;
+  }
+  return new Date(anchor.value.getFullYear(), anchor.value.getMonth() + 1, 1);
+});
+
+const days = computed<Date[]>(() => {
+  const result: Date[] = [];
+  const cur = new Date(rangeStart.value);
+  while (cur < rangeEnd.value) {
+    result.push(new Date(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return result;
+});
+
+const rangeLabel = computed<string>(() => {
+  if (viewMode.value === "month") {
+    return new Intl.DateTimeFormat("es-AR", { month: "long", year: "numeric" })
+      .format(rangeStart.value)
+      .replace(/^./, c => c.toUpperCase());
+  }
+  if (viewMode.value === "day") {
+    return new Intl.DateTimeFormat("es-AR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })
+      .format(anchor.value)
+      .replace(/^./, c => c.toUpperCase());
+  }
+  const s = rangeStart.value;
+  const e = new Date(rangeEnd.value); e.setDate(e.getDate() - 1);
+  const fmtM = new Intl.DateTimeFormat("es-AR", { month: "short" });
+  if (s.getFullYear() === e.getFullYear() && s.getMonth() === e.getMonth()) {
+    return `${s.getDate()} – ${e.getDate()} ${new Intl.DateTimeFormat("es-AR", { month: "long" }).format(s)} ${s.getFullYear()}`;
+  }
+  return `${s.getDate()} ${fmtM.format(s)} – ${e.getDate()} ${fmtM.format(e)} ${e.getFullYear()}`;
+});
+
+function navigate(direction: 1 | -1) {
+  const d = new Date(anchor.value);
+  if (viewMode.value === "week") {
+    d.setDate(d.getDate() + direction * 7);
+    anchor.value = startOfWeek(d);
+  } else if (viewMode.value === "day") {
+    d.setDate(d.getDate() + direction);
+    anchor.value = startOfDay(d);
+  } else {
+    d.setMonth(d.getMonth() + direction);
+    anchor.value = startOfMonth(d);
+  }
+}
+function goToday() {
+  if (viewMode.value === "week") anchor.value = startOfWeek(new Date());
+  else if (viewMode.value === "day") anchor.value = startOfDay(new Date());
+  else anchor.value = startOfMonth(new Date());
+}
+
+watch(viewMode, () => {
+  if (viewMode.value === "week") anchor.value = startOfWeek(anchor.value);
+  else if (viewMode.value === "day") anchor.value = startOfDay(anchor.value);
+  else anchor.value = startOfMonth(anchor.value);
+});
+
+// ─── Professionals for filter ─────────────────────────────────────────────────
+interface ProfDto { id: number; nombre: string; }
+const profesionales  = ref<ProfDto[]>([]);
+const selectedProfId = ref<number | "">("");
+const myProfId       = ref<number | null>(null);
+
+async function loadProfesionales() {
+  try {
+    const res = await axios.get(API_PROF, { headers: headers(), params: { size: 500 } });
+    profesionales.value = res.data.content ?? res.data;
+  } catch { /* silent */ }
+}
+
+async function loadMyProf() {
+  if (!isDoctor.value) return;
+  try {
+    const res = await axios.get(`${API_PROF}/me`, { headers: headers() });
+    myProfId.value = res.data?.id ?? null;
+  } catch { /* silent */ }
+}
+
+// ─── Turnos ───────────────────────────────────────────────────────────────────
+interface TurnoDto {
+  id: number;
+  pacienteId: number;
+  pacienteNombre: string;
+  profesionalId: number;
+  profesionalNombre: string;
+  sucursalId: number;
+  sucursalNombre: string;
+  estudioNombre: string | null;
+  obraSocialNombre: string | null;
+  fechaHora: string;
+  estado: string;
+  observaciones: string | null;
+}
+
+const turnos  = ref<TurnoDto[]>([]);
+const loading = ref(false);
+const error   = ref("");
+
+function toIso(d: Date): string {
+  // Usa hora LOCAL, no UTC (evita desfase en Argentina UTC-3)
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+async function loadTurnos() {
+  loading.value = true;
+  error.value   = "";
+  try {
+    const params: Record<string, string> = {
+      desde: toIso(rangeStart.value),
+      hasta: toIso(rangeEnd.value),
+    };
+    const profId = isDoctor.value ? myProfId.value : (selectedProfId.value || null);
+    if (profId) params.profesionalId = String(profId);
+    const res = await axios.get(API_TURNOS, { headers: headers(), params });
+    turnos.value = res.data;
+  } catch {
+    error.value = "Error al cargar los turnos.";
+  } finally {
+    loading.value = false;
+  }
+}
+
+watch([rangeStart, rangeEnd, selectedProfId, myProfId], loadTurnos);
+
+function turnosForDay(day: Date): TurnoDto[] {
+  const ds = day.toDateString();
+  return turnos.value
+    .filter(t => new Date(t.fechaHora).toDateString() === ds)
+    .sort((a, b) => a.fechaHora.localeCompare(b.fechaHora));
+}
+
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+}
+
+const today = new Date();
+const isToday = (d: Date) => d.toDateString() === today.toDateString();
+const isPast  = (d: Date) => d < today && !isToday(d);
+
+const estadoClass: Record<string, string> = {
+  PENDIENTE:  "bg-yellow-100 text-yellow-800 border-yellow-200",
+  CONFIRMADO: "bg-blue-100 text-blue-800 border-blue-200",
+  ATENDIDO:   "bg-green-100 text-green-800 border-green-200",
+  CANCELADO:  "bg-red-100 text-red-800 border-red-200",
+  AUSENTE:    "bg-gray-100 text-gray-600 border-gray-200",
+};
+const estadoDot: Record<string, string> = {
+  PENDIENTE:  "bg-yellow-400",
+  CONFIRMADO: "bg-blue-500",
+  ATENDIDO:   "bg-green-500",
+  CANCELADO:  "bg-red-400",
+  AUSENTE:    "bg-gray-400",
+};
+
+// Month grid (padding cells for Mon-first layout)
+const monthGrid = computed<(Date | null)[]>(() => {
+  if (viewMode.value !== "month") return [];
+  const first = rangeStart.value;
+  const firstDow = first.getDay(); // 0=Sun
+  const padBefore = firstDow === 0 ? 6 : firstDow - 1;
+  const grid: (Date | null)[] = Array(padBefore).fill(null);
+  days.value.forEach(d => grid.push(d));
+  while (grid.length % 7 !== 0) grid.push(null);
+  return grid;
+});
+
+// Turno detail modal
+const selectedTurno = ref<TurnoDto | null>(null);
+
+// ─── Confirmaciones Masivas ───────────────────────────────────────────────────
+const showConfirmacionesModal = ref(false);
+const confirmacionesRequest = ref({
+  fecha: null as string | null,
+  profesionalId: null as number | null,
+  incluirConfirmados: false,
+});
+const confirmacionesLoading = ref(false);
+const confirmacionesResultado = ref<any>(null);
+
+function abrirConfirmacionesMasivas() {
+  const hoy = new Date();
+  confirmacionesRequest.value.fecha = hoy.toISOString().split("T")[0];
+  confirmacionesRequest.value.profesionalId = selectedProfId.value ? Number(selectedProfId.value) : null;
+  showConfirmacionesModal.value = true;
+  confirmacionesResultado.value = null;
+}
+
+async function enviarConfirmacionesMasivas() {
+  if (!confirmacionesRequest.value.fecha) {
+    alert("Selecciona una fecha");
+    return;
+  }
+
+  confirmacionesLoading.value = true;
+  try {
+    const response = await axios.post(
+      `${API_TURNOS}/confirmacion/enviar-por-fecha`,
+      {
+        fecha: confirmacionesRequest.value.fecha,
+        profesionalId: confirmacionesRequest.value.profesionalId,
+        incluirConfirmados: confirmacionesRequest.value.incluirConfirmados,
+      },
+      { headers: headers() }
+    );
+
+    confirmacionesResultado.value = response.data;
+  } catch (error: any) {
+    alert("Error: " + (error.response?.data?.error || error.message));
+  } finally {
+    confirmacionesLoading.value = false;
+  }
+}
+
+function cerrarConfirmacionesModal() {
+  showConfirmacionesModal.value = false;
+  confirmacionesResultado.value = null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  SCHEDULE TAB (Agenda config)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface AgendaDto {
+  id: number;
+  profesionalId: number;
+  profesionalNombre: string;
+  sucursalId: number;
+  sucursalNombre: string;
+  diaSemana: number;
+  horaInicio: string;
+  horaFin: string;
+  duracionTurnoMinutos: number;
+  activa: boolean;
+}
+
+const agendas      = ref<AgendaDto[]>([]);
+const sucursales   = ref<{ id: number; nombre: string }[]>([]);
+const schedLoading = ref(false);
+const schedError   = ref("");
+const filterProfId = ref("");
+const filterSucId  = ref("");
+
+const showNewForm = ref(false);
+const newForm     = ref({ profesionalId: "", sucursalId: "", diaSemana: "", horaInicio: "08:00", horaFin: "12:00", duracionTurnoMinutos: "30" });
+const newSaving   = ref(false);
+const newError    = ref("");
+
+const diasSemana = [
+  { value: "1", label: "Lunes" }, { value: "2", label: "Martes" },
+  { value: "3", label: "Miércoles" }, { value: "4", label: "Jueves" },
+  { value: "5", label: "Viernes" }, { value: "6", label: "Sábado" },
+];
+const diaLabel: Record<number, string> = { 1: "Lunes", 2: "Martes", 3: "Miércoles", 4: "Jueves", 5: "Viernes", 6: "Sábado", 7: "Domingo" };
+const duraciones = ["15", "20", "30", "40", "45", "60"];
+
+const filteredAgendas = computed(() => {
+  let list = agendas.value;
+  // Doctor solo ve su propia agenda
+  if (isDoctor.value && myProfId.value) {
+    list = list.filter(a => a.profesionalId === myProfId.value);
+  } else {
+    if (filterProfId.value) list = list.filter(a => a.profesionalId === Number(filterProfId.value));
+  }
+  if (filterSucId.value)  list = list.filter(a => a.sucursalId   === Number(filterSucId.value));
+  return list.sort((a, b) => a.diaSemana - b.diaSemana || a.horaInicio.localeCompare(b.horaInicio));
+});
+
+const groupedAgendas = computed(() => {
+  const groups: Record<string, AgendaDto[]> = {};
+  for (const a of filteredAgendas.value) {
+    if (!groups[a.profesionalNombre]) groups[a.profesionalNombre] = [];
+    groups[a.profesionalNombre].push(a);
+  }
+  return groups;
+});
+
+async function loadSchedule() {
+  schedLoading.value = true;
+  schedError.value   = "";
+  try {
+    const [agRes, sucRes] = await Promise.all([
+      axios.get(API_AGENDA,  { headers: headers() }),
+      axios.get(API_SUC,     { headers: headers() }),
+    ]);
+    agendas.value    = agRes.data;
+    sucursales.value = sucRes.data;
+  } catch { schedError.value = "Error al cargar agendas."; }
+  finally { schedLoading.value = false; }
+}
+
+async function createAgenda() {
+  newError.value = "";
+  if (!newForm.value.profesionalId || !newForm.value.sucursalId || !newForm.value.diaSemana) {
+    newError.value = "Profesional, sucursal y día son obligatorios."; return;
+  }
+  newSaving.value = true;
+  try {
+    await axios.post(API_AGENDA, {
+      profesionalId: Number(newForm.value.profesionalId),
+      sucursalId:    Number(newForm.value.sucursalId),
+      diaSemana:     Number(newForm.value.diaSemana),
+      horaInicio:    newForm.value.horaInicio,
+      horaFin:       newForm.value.horaFin,
+      duracionTurnoMinutos: Number(newForm.value.duracionTurnoMinutos),
+    }, { headers: headers() });
+    showNewForm.value = false;
+    newForm.value = { profesionalId: "", sucursalId: "", diaSemana: "", horaInicio: "08:00", horaFin: "12:00", duracionTurnoMinutos: "30" };
+    await loadSchedule();
+  } catch (e: any) {
+    newError.value = e?.response?.data?.error ?? "Error al crear.";
+  } finally { newSaving.value = false; }
+}
+
+async function deleteAgenda(id: number) {
+  try {
+    await axios.delete(`${API_AGENDA}/${id}`, { headers: headers() });
+    await loadSchedule();
+  } catch (e: any) {
+    schedError.value = e?.response?.data?.error ?? "Error al eliminar.";
+    setTimeout(() => { schedError.value = ""; }, 3000);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  BLOQUEOS DE AGENDA (Vacaciones / Licencias)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface BloqueoDto {
+  id: number;
+  profesionalId: number;
+  profesionalNombre: string;
+  fechaDesde: string;
+  fechaHasta: string;
+  motivo: string | null;
+  tipo: string;
+}
+
+const bloqueos          = ref<BloqueoDto[]>([]);
+const showBloqueoForm   = ref(false);
+const bloqueoSaving     = ref(false);
+const bloqueoError      = ref("");
+const bloqueoForm       = ref({
+  profesionalId: "",
+  fechaDesde: "",
+  fechaHasta: "",
+  motivo: "",
+  tipo: "VACACIONES",
+});
+const tiposBloqueo = [
+  { value: "VACACIONES", label: "Vacaciones" },
+  { value: "LICENCIA",   label: "Licencia" },
+  { value: "FERIADO",    label: "Feriado" },
+  { value: "OTRO",       label: "Otro" },
+];
+
+async function loadBloqueos() {
+  try {
+    const profId = isDoctor.value ? myProfId.value : (filterProfId.value || null);
+    const params: Record<string, string> = {};
+    if (profId) params.profesionalId = String(profId);
+    const res = await axios.get(API_BLOQUEOS, { headers: headers(), params });
+    bloqueos.value = res.data;
+  } catch { /* silent */ }
+}
+
+async function createBloqueo() {
+  bloqueoError.value = "";
+  if (!bloqueoForm.value.profesionalId || !bloqueoForm.value.fechaDesde || !bloqueoForm.value.fechaHasta) {
+    bloqueoError.value = "Profesional, fecha desde y fecha hasta son obligatorios.";
+    return;
+  }
+  bloqueoSaving.value = true;
+  try {
+    await axios.post(API_BLOQUEOS, {
+      profesionalId: Number(bloqueoForm.value.profesionalId),
+      fechaDesde:    bloqueoForm.value.fechaDesde,
+      fechaHasta:    bloqueoForm.value.fechaHasta,
+      motivo:        bloqueoForm.value.motivo || null,
+      tipo:          bloqueoForm.value.tipo,
+    }, { headers: headers() });
+    showBloqueoForm.value = false;
+    bloqueoForm.value = { profesionalId: "", fechaDesde: "", fechaHasta: "", motivo: "", tipo: "VACACIONES" };
+    await loadBloqueos();
+  } catch (e: any) {
+    const data = e?.response?.data;
+    bloqueoError.value = data?.error ?? data?.message ?? e?.message ?? "Error al guardar.";
+  } finally {
+    bloqueoSaving.value = false;
+  }
+}
+
+async function deleteBloqueo(id: number) {
+  if (!confirm("¿Eliminar este bloqueo?")) return;
+  try {
+    await axios.delete(`${API_BLOQUEOS}/${id}`, { headers: headers() });
+    await loadBloqueos();
+  } catch (e: any) {
+    schedError.value = e?.response?.data?.error ?? "Error al eliminar bloqueo.";
+    setTimeout(() => { schedError.value = ""; }, 3000);
+  }
+}
+
+function formatDateRange(desde: string, hasta: string): string {
+  const fmt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("es-AR");
+  return `${fmt(desde)} – ${fmt(hasta)}`;
+}
+
+// ─── Bootstrap ────────────────────────────────────────────────────────────────
+onMounted(async () => {
+  await Promise.all([loadProfesionales(), loadMyProf()]);
+  await Promise.all([loadTurnos(), loadSchedule(), loadBloqueos()]);
+});
+</script>
+
+<template>
+  <div class="space-y-4">
+    <!-- Page header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-bold">{{ isDoctor ? "Mi Agenda" : "Agenda Médica" }}</h1>
+        <p class="text-muted-foreground text-sm">
+          {{ isDoctor ? "Tus turnos programados" : "Turnos y horarios por profesional y sucursal" }}
+        </p>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex border-b gap-1">
+      <button
+        @click="tab = 'calendar'"
+        :class="['px-4 py-2 text-sm font-medium transition-colors -mb-px',
+          tab === 'calendar'
+            ? 'border-b-2 border-primary text-primary'
+            : 'text-muted-foreground hover:text-foreground']">
+        <span class="flex items-center gap-1.5"><CalendarDays class="h-4 w-4" /> Calendario de Turnos</span>
+      </button>
+      <button
+        @click="tab = 'schedule'"
+        :class="['px-4 py-2 text-sm font-medium transition-colors -mb-px',
+          tab === 'schedule'
+            ? 'border-b-2 border-primary text-primary'
+            : 'text-muted-foreground hover:text-foreground']">
+        <span class="flex items-center gap-1.5"><Calendar class="h-4 w-4" /> Horarios Configurados</span>
+      </button>
+    </div>
+
+    <!-- ═══════════ CALENDAR TAB ═══════════ -->
+    <template v-if="tab === 'calendar'">
+
+      <!-- Controls row -->
+      <div class="flex flex-wrap items-center gap-2">
+        <!-- Navigation -->
+        <button @click="navigate(-1)" class="p-1.5 rounded border hover:bg-muted transition-colors">
+          <ChevronLeft class="h-4 w-4" />
+        </button>
+        <button @click="navigate(1)" class="p-1.5 rounded border hover:bg-muted transition-colors">
+          <ChevronRight class="h-4 w-4" />
+        </button>
+        <span class="font-semibold text-sm sm:text-base min-w-[200px]">{{ rangeLabel }}</span>
+        <button @click="goToday"
+          class="text-xs px-3 py-1.5 rounded border hover:bg-muted transition-colors">
+          Hoy
+        </button>
+
+        <div class="flex-1" />
+
+        <!-- View toggle -->
+        <div class="flex rounded-md border overflow-hidden text-sm">
+          <button @click="viewMode = 'day'"
+            :class="['px-3 py-1.5 flex items-center gap-1.5 transition-colors',
+              viewMode === 'day' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted']">
+            <Calendar class="h-3.5 w-3.5" /> Día
+          </button>
+          <button @click="viewMode = 'week'"
+            :class="['px-3 py-1.5 flex items-center gap-1.5 border-l transition-colors',
+              viewMode === 'week' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted']">
+            <CalendarDays class="h-3.5 w-3.5" /> Semana
+          </button>
+          <button @click="viewMode = 'month'"
+            :class="['px-3 py-1.5 flex items-center gap-1.5 border-l transition-colors',
+              viewMode === 'month' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted']">
+            <Calendar class="h-3.5 w-3.5" /> Mes
+          </button>
+        </div>
+        <button @click="loadTurnos" :disabled="loading"
+          class="p-1.5 rounded border hover:bg-muted transition-colors" title="Actualizar">
+          <RefreshCw :class="['h-4 w-4', loading && 'animate-spin']" />
+        </button>
+        <button v-if="canFilter"
+          @click="abrirConfirmacionesMasivas"
+          class="px-3 py-1.5 text-sm rounded border border-primary bg-primary/10 text-primary hover:bg-primary/20 transition-colors flex items-center gap-2">
+          <Send class="h-4 w-4" />
+          Enviar confirmaciones
+        </button>
+      </div>
+
+      <!-- Professional filter -->
+      <div v-if="canFilter" class="flex items-center gap-2">
+        <Filter class="h-4 w-4 text-muted-foreground shrink-0" />
+        <select v-model="selectedProfId"
+          class="text-sm border rounded-md px-3 py-1.5 bg-background focus:outline-none focus:ring-2 focus:ring-ring">
+          <option value="">Todos los profesionales</option>
+          <option v-for="p in profesionales" :key="p.id" :value="p.id">
+            {{ p.nombre }}
+          </option>
+        </select>
+      </div>
+
+      <!-- Error -->
+      <div v-if="error" class="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
+        {{ error }}
+      </div>
+
+      <!-- ─── DAY VIEW ─── -->
+      <div v-if="viewMode === 'day'" class="space-y-2">
+        <div v-if="loading" class="flex justify-center py-12">
+          <div class="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+        </div>
+        <template v-else>
+          <div v-if="turnosForDay(anchor).length === 0"
+            class="flex flex-col items-center justify-center py-16 text-muted-foreground">
+            <CalendarDays class="h-10 w-10 mb-3 opacity-30" />
+            <p class="text-sm">No hay turnos para este día</p>
+          </div>
+          <button
+            v-for="t in turnosForDay(anchor)" :key="t.id"
+            @click="selectedTurno = t"
+            class="w-full text-left rounded-lg border bg-background hover:shadow-md transition-shadow p-0 overflow-hidden"
+          >
+            <div class="flex">
+              <!-- Time strip -->
+              <div :class="['w-20 shrink-0 flex flex-col items-center justify-center py-4 text-white font-bold text-lg',
+                t.estado === 'PENDIENTE' ? 'bg-yellow-400' :
+                t.estado === 'CONFIRMADO' ? 'bg-blue-500' :
+                t.estado === 'ATENDIDO' ? 'bg-green-500' :
+                t.estado === 'CANCELADO' ? 'bg-red-400' : 'bg-gray-400']">
+                {{ formatTime(t.fechaHora) }}
+              </div>
+              <!-- Content -->
+              <div class="flex-1 px-4 py-3 space-y-1.5">
+                <div class="flex items-start justify-between gap-2">
+                  <div>
+                    <p class="font-semibold text-base leading-tight">{{ t.pacienteNombre }}</p>
+                    <p v-if="!isDoctor" class="text-sm text-muted-foreground">{{ t.profesionalNombre }}</p>
+                  </div>
+                  <span :class="['shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border',
+                    estadoClass[t.estado] ?? 'bg-gray-100 text-gray-700 border-gray-200']">
+                    <span :class="['w-1.5 h-1.5 rounded-full', estadoDot[t.estado] ?? 'bg-gray-400']"></span>
+                    {{ t.estado.charAt(0) + t.estado.slice(1).toLowerCase() }}
+                  </span>
+                </div>
+                <div class="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+                  <span v-if="t.sucursalNombre" class="flex items-center gap-1">
+                    <span class="font-medium text-foreground/70">Sucursal:</span> {{ t.sucursalNombre }}
+                  </span>
+                  <span v-if="t.estudioNombre" class="flex items-center gap-1">
+                    <span class="font-medium text-foreground/70">Estudio:</span> {{ t.estudioNombre }}
+                  </span>
+                  <span v-if="t.obraSocialNombre" class="flex items-center gap-1">
+                    <span class="font-medium text-foreground/70">Obra Social:</span> {{ t.obraSocialNombre }}
+                  </span>
+                </div>
+                <p v-if="t.observaciones" class="text-xs text-muted-foreground italic border-t pt-1 mt-1">
+                  {{ t.observaciones }}
+                </p>
+              </div>
+            </div>
+          </button>
+          <!-- Resumen del día -->
+          <div v-if="turnosForDay(anchor).length > 0"
+            class="flex flex-wrap gap-3 pt-2 border-t text-xs text-muted-foreground">
+            <span class="font-medium text-foreground">{{ turnosForDay(anchor).length }} turno{{ turnosForDay(anchor).length !== 1 ? 's' : '' }}</span>
+            <template v-for="(cls, estado) in estadoClass" :key="estado">
+              <span v-if="turnosForDay(anchor).filter(t => t.estado === estado).length > 0"
+                :class="['px-2 py-0.5 rounded-full border', cls]">
+                {{ turnosForDay(anchor).filter(t => t.estado === estado).length }} {{ estado.toLowerCase() }}{{ turnosForDay(anchor).filter(t => t.estado === estado).length !== 1 ? 's' : '' }}
+              </span>
+            </template>
+          </div>
+        </template>
+      </div>
+
+      <!-- ─── WEEK VIEW ─── -->
+      <div v-else-if="viewMode === 'week'" class="grid grid-cols-7 gap-1">
+        <!-- Day headers -->
+        <button v-for="day in days" :key="'h-' + day.toISOString()"
+          @click="anchor = startOfDay(day); viewMode = 'day'"
+          :class="['text-center pb-1 border-b hover:bg-muted/40 rounded-t transition-colors', isToday(day) ? 'border-primary' : 'border-border']">
+          <div class="text-xs text-muted-foreground font-medium uppercase">
+            {{ ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"][day.getDay()] }}
+          </div>
+          <div :class="['text-sm font-semibold mx-auto w-7 h-7 flex items-center justify-center rounded-full mt-0.5',
+            isToday(day) ? 'bg-primary text-primary-foreground' : '']">
+            {{ day.getDate() }}
+          </div>
+        </button>
+
+        <!-- Day cells -->
+        <div v-for="day in days" :key="'c-' + day.toISOString()"
+          :class="['min-h-[380px] rounded-md p-1 space-y-1 border transition-colors',
+            isToday(day) ? 'bg-primary/5 border-primary/25' : 'bg-muted/20 border-transparent',
+            isPast(day) ? 'opacity-60' : '']">
+          <div v-if="loading" class="flex justify-center pt-4">
+            <div class="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+          </div>
+          <template v-else>
+            <button
+              v-for="t in turnosForDay(day)" :key="t.id"
+              @click="selectedTurno = t"
+              :class="['w-full text-left rounded border px-1.5 py-1 text-xs hover:opacity-80 transition-opacity',
+                estadoClass[t.estado] ?? 'bg-gray-100 text-gray-700 border-gray-200']">
+              <div class="font-semibold">{{ formatTime(t.fechaHora) }}</div>
+              <div class="truncate">{{ t.pacienteNombre }}</div>
+              <div v-if="!isDoctor" class="truncate text-[10px] opacity-70">
+                {{ t.profesionalNombre }}
+              </div>
+            </button>
+            <div v-if="turnosForDay(day).length === 0"
+              class="text-[10px] text-muted-foreground text-center pt-3 opacity-60">Sin turnos</div>
+          </template>
+        </div>
+      </div>
+
+      <!-- ─── MONTH VIEW ─── -->
+      <div v-else-if="viewMode === 'month'">
+        <div class="grid grid-cols-7 mb-1">
+          <div v-for="d in ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom']" :key="d"
+            class="text-center text-xs font-medium text-muted-foreground py-1 uppercase">{{ d }}</div>
+        </div>
+        <div class="grid grid-cols-7 gap-1">
+          <template v-for="(cell, idx) in monthGrid" :key="idx">
+            <div v-if="!cell" class="min-h-[90px] rounded-md bg-muted/10 border border-dashed border-border/30"></div>
+            <div v-else
+              :class="['min-h-[90px] rounded-md p-1 border transition-colors',
+                isToday(cell) ? 'bg-primary/5 border-primary/30' : 'bg-background border-border',
+                isPast(cell) ? 'opacity-60' : '']">
+              <button
+                @click="anchor = startOfDay(cell); viewMode = 'day'"
+                :class="['text-xs font-semibold mb-1 w-5 h-5 flex items-center justify-center rounded-full hover:ring-2 hover:ring-primary/50 transition-all',
+                  isToday(cell) ? 'bg-primary text-primary-foreground' : 'text-muted-foreground']">
+                {{ cell.getDate() }}
+              </button>
+              <div v-if="loading" class="flex justify-center py-1">
+                <div class="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+              </div>
+              <template v-else>
+                <button
+                  v-for="t in turnosForDay(cell).slice(0, 3)" :key="t.id"
+                  @click="selectedTurno = t"
+                  :class="['w-full flex items-center gap-1 px-1 py-0.5 rounded text-[10px] hover:opacity-80 transition-opacity mb-0.5 border',
+                    estadoClass[t.estado] ?? 'bg-gray-100 text-gray-700 border-gray-200']">
+                  <span :class="['inline-block w-1.5 h-1.5 rounded-full shrink-0', estadoDot[t.estado] ?? 'bg-gray-400']"></span>
+                  <span class="truncate">{{ formatTime(t.fechaHora) }} {{ t.pacienteNombre }}</span>
+                </button>
+                <div v-if="turnosForDay(cell).length > 3"
+                  class="text-[10px] text-primary font-medium px-1">
+                  +{{ turnosForDay(cell).length - 3 }} más
+                </div>
+              </template>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- Legend -->
+      <div class="flex flex-wrap gap-3 pt-1">
+        <div v-for="(cls, label) in estadoClass" :key="label"
+          :class="['flex items-center gap-1.5 text-xs px-2 py-0.5 rounded border', cls]">
+          <span :class="['w-1.5 h-1.5 rounded-full', estadoDot[label]]"></span>
+          {{ label.charAt(0) + label.slice(1).toLowerCase() }}
+        </div>
+      </div>
+    </template>
+
+    <!-- ═══════════ SCHEDULE TAB ═══════════ -->
+    <template v-else>
+      <div class="flex items-center justify-between">
+        <p class="text-sm text-muted-foreground">Horarios de atención configurados por profesional</p>
+        <button v-if="canManage" @click="showNewForm = !showNewForm"
+          class="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
+          <component :is="showNewForm ? X : Plus" class="h-3.5 w-3.5" />
+          {{ showNewForm ? "Cancelar" : "Nuevo Horario" }}
+        </button>
+      </div>
+
+      <!-- Schedule error -->
+      <div v-if="schedError" class="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
+        {{ schedError }}
+      </div>
+
+      <!-- Filters (solo admin/recepcion) -->
+      <div v-if="!isDoctor" class="flex flex-wrap gap-2">
+        <select v-model="filterProfId"
+          class="text-sm border rounded-md px-3 py-1.5 bg-background focus:outline-none focus:ring-2 focus:ring-ring">
+          <option value="">Todos los profesionales</option>
+          <option v-for="p in profesionales" :key="p.id" :value="String(p.id)">
+            {{ p.nombre }}
+          </option>
+        </select>
+        <select v-model="filterSucId"
+          class="text-sm border rounded-md px-3 py-1.5 bg-background focus:outline-none focus:ring-2 focus:ring-ring">
+          <option value="">Todas las sucursales</option>
+          <option v-for="s in sucursales" :key="s.id" :value="String(s.id)">{{ s.nombre }}</option>
+        </select>
+      </div>
+      <!-- Doctor: solo filtra por sucursal -->
+      <div v-else class="flex flex-wrap gap-2">
+        <select v-model="filterSucId"
+          class="text-sm border rounded-md px-3 py-1.5 bg-background focus:outline-none focus:ring-2 focus:ring-ring">
+          <option value="">Todas las sucursales</option>
+          <option v-for="s in sucursales" :key="s.id" :value="String(s.id)">{{ s.nombre }}</option>
+        </select>
+      </div>
+
+      <!-- New Agenda Form -->
+      <Card v-if="showNewForm && canManage">
+        <CardHeader><CardTitle class="text-base">Agregar horario de atención</CardTitle></CardHeader>
+        <CardContent>
+          <form @submit.prevent="createAgenda" class="space-y-4">
+            <div v-if="newError" class="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">{{ newError }}</div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div class="space-y-1">
+                <label class="text-sm font-medium">Profesional <span class="text-destructive">*</span></label>
+                <select v-model="newForm.profesionalId"
+                  class="w-full text-sm border rounded-md px-3 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-ring">
+                  <option value="">Seleccione...</option>
+                  <option v-for="p in profesionales" :key="p.id" :value="String(p.id)">
+                    {{ p.nombre }}
+                  </option>
+                </select>
+              </div>
+              <div class="space-y-1">
+                <label class="text-sm font-medium">Sucursal <span class="text-destructive">*</span></label>
+                <select v-model="newForm.sucursalId"
+                  class="w-full text-sm border rounded-md px-3 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-ring">
+                  <option value="">Seleccione...</option>
+                  <option v-for="s in sucursales" :key="s.id" :value="String(s.id)">{{ s.nombre }}</option>
+                </select>
+              </div>
+              <div class="space-y-1">
+                <label class="text-sm font-medium">Día <span class="text-destructive">*</span></label>
+                <select v-model="newForm.diaSemana"
+                  class="w-full text-sm border rounded-md px-3 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-ring">
+                  <option value="">Seleccione día...</option>
+                  <option v-for="d in diasSemana" :key="d.value" :value="d.value">{{ d.label }}</option>
+                </select>
+              </div>
+              <div class="space-y-1">
+                <label class="text-sm font-medium">Hora Inicio</label>
+                <Input v-model="newForm.horaInicio" type="time" class="text-sm" />
+              </div>
+              <div class="space-y-1">
+                <label class="text-sm font-medium">Hora Fin</label>
+                <Input v-model="newForm.horaFin" type="time" class="text-sm" />
+              </div>
+              <div class="space-y-1">
+                <label class="text-sm font-medium">Duración Turno</label>
+                <select v-model="newForm.duracionTurnoMinutos"
+                  class="w-full text-sm border rounded-md px-3 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-ring">
+                  <option v-for="d in duraciones" :key="d" :value="d">{{ d }} min</option>
+                </select>
+              </div>
+            </div>
+            <div class="flex justify-end gap-2">
+              <Button type="button" variant="outline" @click="showNewForm = false">Cancelar</Button>
+              <Button type="submit" :disabled="newSaving">{{ newSaving ? "Guardando..." : "Agregar Horario" }}</Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      <!-- Bloqueo button + form (solo coordinador/admin) -->
+      <div v-if="canManage" class="flex items-center justify-between border-t pt-4">
+        <p class="text-sm font-medium text-muted-foreground">Vacaciones / Bloqueos de Agenda</p>
+        <button @click="showBloqueoForm = !showBloqueoForm"
+          class="inline-flex items-center gap-2 rounded-md border border-orange-400 bg-orange-50 px-3 py-1.5 text-sm font-medium text-orange-700 hover:bg-orange-100 transition-colors">
+          <component :is="showBloqueoForm ? X : BanIcon" class="h-3.5 w-3.5" />
+          {{ showBloqueoForm ? "Cancelar" : "Registrar Vacaciones / Bloqueo" }}
+        </button>
+      </div>
+
+      <!-- Bloqueo form -->
+      <Card v-if="showBloqueoForm && canManage">
+        <CardHeader><CardTitle class="text-base">Registrar Vacaciones o Bloqueo de Agenda</CardTitle></CardHeader>
+        <CardContent>
+          <form @submit.prevent="createBloqueo" class="space-y-4">
+            <div v-if="bloqueoError" class="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">{{ bloqueoError }}</div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div class="space-y-1">
+                <label class="text-sm font-medium">Profesional <span class="text-destructive">*</span></label>
+                <select v-model="bloqueoForm.profesionalId"
+                  class="w-full text-sm border rounded-md px-3 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-ring">
+                  <option value="">Seleccione...</option>
+                  <option v-for="p in profesionales" :key="p.id" :value="String(p.id)">{{ p.nombre }}</option>
+                </select>
+              </div>
+              <div class="space-y-1">
+                <label class="text-sm font-medium">Tipo <span class="text-destructive">*</span></label>
+                <select v-model="bloqueoForm.tipo"
+                  class="w-full text-sm border rounded-md px-3 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-ring">
+                  <option v-for="t in tiposBloqueo" :key="t.value" :value="t.value">{{ t.label }}</option>
+                </select>
+              </div>
+              <div class="space-y-1">
+                <label class="text-sm font-medium">Motivo</label>
+                <Input v-model="bloqueoForm.motivo" placeholder="Descripción opcional" class="text-sm" />
+              </div>
+              <div class="space-y-1">
+                <label class="text-sm font-medium">Fecha Desde <span class="text-destructive">*</span></label>
+                <Input v-model="bloqueoForm.fechaDesde" type="date" class="text-sm" />
+              </div>
+              <div class="space-y-1">
+                <label class="text-sm font-medium">Fecha Hasta <span class="text-destructive">*</span></label>
+                <Input v-model="bloqueoForm.fechaHasta" type="date" class="text-sm" />
+              </div>
+            </div>
+            <div class="flex justify-end gap-2">
+              <Button type="button" variant="outline" @click="showBloqueoForm = false">Cancelar</Button>
+              <Button type="submit" :disabled="bloqueoSaving" class="bg-orange-600 hover:bg-orange-700 text-white">
+                {{ bloqueoSaving ? "Guardando..." : "Registrar Bloqueo" }}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      <!-- Bloqueos activos list -->
+      <div v-if="bloqueos.length > 0" class="space-y-2">
+        <p class="text-sm font-medium text-muted-foreground">Bloqueos activos / próximos</p>
+        <div class="rounded-md border overflow-hidden">
+          <table class="w-full text-sm">
+            <thead class="border-b bg-orange-50">
+              <tr>
+                <th class="px-4 py-2 text-left font-medium text-orange-800">Profesional</th>
+                <th class="px-4 py-2 text-left font-medium text-orange-800">Período</th>
+                <th class="px-4 py-2 text-left font-medium text-orange-800">Tipo</th>
+                <th class="px-4 py-2 text-left font-medium text-orange-800">Motivo</th>
+                <th v-if="canManage" class="px-4 py-2 text-right"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="b in bloqueos" :key="b.id" class="border-b hover:bg-muted/30 transition-colors">
+                <td class="px-4 py-2 font-medium">{{ b.profesionalNombre }}</td>
+                <td class="px-4 py-2 font-mono text-xs">{{ formatDateRange(b.fechaDesde, b.fechaHasta) }}</td>
+                <td class="px-4 py-2">
+                  <span class="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 font-medium">
+                    {{ tiposBloqueo.find(t => t.value === b.tipo)?.label ?? b.tipo }}
+                  </span>
+                </td>
+                <td class="px-4 py-2 text-muted-foreground">{{ b.motivo ?? "—" }}</td>
+                <td v-if="canManage" class="px-4 py-2 text-right">
+                  <button @click="deleteBloqueo(b.id)"
+                    class="text-muted-foreground hover:text-destructive transition-colors" title="Eliminar">
+                    <Trash2 class="h-4 w-4" />
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Agenda list -->
+      <div v-if="schedLoading" class="p-6 text-sm text-muted-foreground text-center">Cargando...</div>
+      <div v-else-if="Object.keys(groupedAgendas).length === 0"
+        class="p-8 text-center text-muted-foreground">
+        <Calendar class="h-8 w-8 mx-auto mb-2 opacity-40" />
+        <p class="text-sm">No hay horarios configurados</p>
+      </div>
+      <div v-else class="space-y-4">
+        <Card v-for="(items, profName) in groupedAgendas" :key="profName">
+          <CardHeader class="pb-2">
+            <CardTitle class="text-base flex items-center gap-2">
+              <span class="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
+                {{ String(profName)[0] }}
+              </span>
+              {{ profName }}
+            </CardTitle>
+          </CardHeader>
+          <CardContent class="p-0">
+            <table class="w-full text-sm">
+              <thead class="border-b bg-muted/50">
+                <tr>
+                  <th class="px-4 py-2 text-left font-medium text-muted-foreground">Día</th>
+                  <th class="px-4 py-2 text-left font-medium text-muted-foreground">Horario</th>
+                  <th class="px-4 py-2 text-left font-medium text-muted-foreground">Duración</th>
+                  <th class="px-4 py-2 text-left font-medium text-muted-foreground">Sucursal</th>
+                  <th v-if="canManage" class="px-4 py-2 text-right"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="a in items" :key="a.id" class="border-b hover:bg-muted/30 transition-colors">
+                  <td class="px-4 py-2">
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                      {{ diaLabel[a.diaSemana] }}
+                    </span>
+                  </td>
+                  <td class="px-4 py-2 font-mono text-xs">{{ a.horaInicio }} – {{ a.horaFin }}</td>
+                  <td class="px-4 py-2 text-muted-foreground">{{ a.duracionTurnoMinutos }} min</td>
+                  <td class="px-4 py-2">
+                    <span class="text-xs px-1.5 py-0.5 rounded bg-muted">{{ a.sucursalNombre }}</span>
+                  </td>
+                  <td v-if="canManage" class="px-4 py-2 text-right">
+                    <button @click="deleteAgenda(a.id)"
+                      class="text-muted-foreground hover:text-destructive transition-colors" title="Eliminar">
+                      <Trash2 class="h-4 w-4" />
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      </div>
+    </template>
+
+    <!-- ═══════════ TURNO DETAIL MODAL ═══════════ -->
+    <Teleport to="body">
+      <div v-if="selectedTurno"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+        @click.self="selectedTurno = null">
+        <div class="bg-background rounded-lg shadow-xl w-full max-w-sm">
+          <div class="flex items-center justify-between px-5 py-4 border-b">
+            <h2 class="font-semibold">Detalle del Turno</h2>
+            <button @click="selectedTurno = null" class="p-1 rounded hover:bg-muted text-lg leading-none">&times;</button>
+          </div>
+          <div class="px-5 py-4 space-y-3 text-sm">
+            <span :class="['inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border',
+              estadoClass[selectedTurno.estado] ?? 'bg-gray-100 text-gray-700 border-gray-200']">
+              <span :class="['w-1.5 h-1.5 rounded-full', estadoDot[selectedTurno.estado]]"></span>
+              {{ selectedTurno.estado }}
+            </span>
+            <div class="grid grid-cols-2 gap-y-2 gap-x-4">
+              <div>
+                <div class="text-xs text-muted-foreground">Fecha y Hora</div>
+                <div class="font-medium">
+                  {{ new Date(selectedTurno.fechaHora).toLocaleDateString("es-AR") }}
+                  {{ formatTime(selectedTurno.fechaHora) }}
+                </div>
+              </div>
+              <div>
+                <div class="text-xs text-muted-foreground">Sucursal</div>
+                <div class="font-medium">{{ selectedTurno.sucursalNombre }}</div>
+              </div>
+              <div class="col-span-2">
+                <div class="text-xs text-muted-foreground">Paciente</div>
+                <div class="font-medium">{{ selectedTurno.pacienteNombre }}</div>
+              </div>
+              <div class="col-span-2">
+                <div class="text-xs text-muted-foreground">Profesional</div>
+                <div class="font-medium">{{ selectedTurno.profesionalNombre }}</div>
+              </div>
+              <div v-if="selectedTurno.estudioNombre" class="col-span-2">
+                <div class="text-xs text-muted-foreground">Estudio</div>
+                <div>{{ selectedTurno.estudioNombre }}</div>
+              </div>
+              <div v-if="selectedTurno.obraSocialNombre" class="col-span-2">
+                <div class="text-xs text-muted-foreground">Obra Social</div>
+                <div>{{ selectedTurno.obraSocialNombre }}</div>
+              </div>
+              <div v-if="selectedTurno.observaciones" class="col-span-2">
+                <div class="text-xs text-muted-foreground">Observaciones</div>
+                <div class="text-muted-foreground">{{ selectedTurno.observaciones }}</div>
+              </div>
+            </div>
+          </div>
+          <div class="px-5 py-3 border-t flex justify-end">
+            <button @click="selectedTurno = null"
+              class="px-4 py-1.5 text-sm rounded border hover:bg-muted transition-colors">Cerrar</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- ═══════════ CONFIRMACIONES MASIVAS MODAL ═══════════ -->
+    <Teleport to="body">
+      <div v-if="showConfirmacionesModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-96 overflow-y-auto">
+          <!-- Header -->
+          <div class="sticky top-0 bg-gradient-to-r from-primary to-primary/80 text-white px-6 py-4 flex justify-between items-center">
+            <h2 class="text-lg font-semibold">Enviar Confirmaciones Masivas</h2>
+            <button
+              @click="cerrarConfirmacionesModal"
+              class="text-white hover:bg-white/20 p-1 rounded"
+            >
+              ✕
+            </button>
+          </div>
+
+          <!-- Contenido -->
+          <div v-if="!confirmacionesResultado" class="p-6 space-y-4">
+            <!-- Fecha -->
+            <div>
+              <label class="block text-sm font-medium mb-2">Fecha *</label>
+              <input
+                v-model="confirmacionesRequest.fecha"
+                type="date"
+                class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+
+            <!-- Profesional (solo si hay permiso) -->
+            <div v-if="isAdmin">
+              <label class="block text-sm font-medium mb-2">Profesional (Opcional)</label>
+              <select
+                v-model.number="confirmacionesRequest.profesionalId"
+                class="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option :value="null">Todos los profesionales</option>
+                <option v-for="prof in profesionales" :key="prof.id" :value="prof.id">
+                  {{ prof.nombre }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Incluir confirmados -->
+            <label class="flex items-center gap-2">
+              <input
+                v-model="confirmacionesRequest.incluirConfirmados"
+                type="checkbox"
+                class="rounded"
+              />
+              <span class="text-sm">Incluir turnos ya confirmados</span>
+            </label>
+
+            <!-- Botones -->
+            <div class="flex gap-3 pt-4">
+              <button
+                @click="enviarConfirmacionesMasivas"
+                :disabled="confirmacionesLoading || !confirmacionesRequest.fecha"
+                class="flex-1 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 disabled:opacity-50 transition-colors"
+              >
+                {{ confirmacionesLoading ? "Enviando..." : "Enviar Confirmaciones" }}
+              </button>
+              <button
+                @click="cerrarConfirmacionesModal"
+                class="flex-1 px-4 py-2 border rounded-md hover:bg-muted transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+
+          <!-- Resultados -->
+          <div v-else class="p-6 space-y-4">
+            <!-- Resumen -->
+            <div class="bg-muted p-4 rounded-lg">
+              <div class="grid grid-cols-3 gap-4 text-center mb-3">
+                <div>
+                  <div class="text-2xl font-bold text-primary">{{ confirmacionesResultado.total }}</div>
+                  <div class="text-xs text-muted-foreground">Total</div>
+                </div>
+                <div>
+                  <div class="text-2xl font-bold text-green-600">{{ confirmacionesResultado.enviados }}</div>
+                  <div class="text-xs text-muted-foreground">Enviados</div>
+                </div>
+                <div>
+                  <div class="text-2xl font-bold text-red-600">{{ confirmacionesResultado.fallidos }}</div>
+                  <div class="text-xs text-muted-foreground">Fallidos</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tabla de detalles -->
+            <div class="space-y-2 max-h-48 overflow-y-auto">
+              <div
+                v-for="detalle in confirmacionesResultado.detalles"
+                :key="detalle.turnoId"
+                :class="[
+                  'p-3 rounded-md border text-sm',
+                  detalle.exitoso
+                    ? 'bg-green-50 border-green-200'
+                    : 'bg-red-50 border-red-200'
+                ]"
+              >
+                <div class="font-medium">{{ detalle.paciente }}</div>
+                <div class="text-xs text-muted-foreground">{{ detalle.email || "Sin email" }}</div>
+                <div v-if="!detalle.exitoso" class="text-xs text-red-600 mt-1">
+                  ❌ {{ detalle.razon }}
+                </div>
+                <div v-else class="text-xs text-green-600 mt-1">
+                  ✓ Confirmación enviada
+                </div>
+              </div>
+            </div>
+
+            <!-- Botón cerrar -->
+            <div class="flex gap-3 pt-4">
+              <button
+                @click="cerrarConfirmacionesModal"
+                class="flex-1 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+  </div>
+</template>
